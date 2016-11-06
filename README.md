@@ -4,5 +4,5 @@ usage:
 make
 
 first run ./server
-then run ./client, type the filename to send, press enter.
-the filename will be sent to server, and is renamed to 'file.out' by server.
+then run ./client, type the file name to send, press enter.
+the file will be sent to server, and is renamed to 'file.out' by server.
