@@ -9,14 +9,30 @@
 #include <sys/epoll.h>
 #include <sys/wait.h>
 #include <fcntl.h>
+#include <pthread.h>
+
+int sockfd;
+char stdin_str_buffer[128];
+int stdin_str_len;
+pthread_mutex_t thread_lock;
+
+void *thread(void *arg)
+{
+
+    while (1) {
+        fgets(stdin_str_buffer, 128, stdin);
+        stdin_str_len = strlen(stdin_str_buffer);
+        stdin_str_buffer[stdin_str_len-1] = '\0';
+        printf("stdin: %s\n", stdin_str_buffer);
+
+    }
+}
 
 int main(int argc, char *argv[])
 {
-    char stdin_str_buffer[128];
-    int stdin_str_len;
+    
     char block[1024];
     int file, nread;
-    int sockfd;
     int ret;
     struct sockaddr_in address;
     int addr_len;
@@ -24,9 +40,18 @@ int main(int argc, char *argv[])
     struct epoll_event ev, events[2];
     int epollfd;
     int nfds, i;
+    pthread_t tid;
 
+    pthread_mutex_init(&thread_lock, NULL);
+
+    ret = pthread_create(&tid, NULL, thread, NULL);
+    if (ret) {
+        perror("pthread_create");
+        exit(EXIT_FAILURE);
+    }
 
     //get file name
+#if 0
     fgets(stdin_str_buffer, 128, stdin);
     stdin_str_len = strlen(stdin_str_buffer);
     stdin_str_buffer[stdin_str_len-1] = '\0';
@@ -38,6 +63,7 @@ int main(int argc, char *argv[])
     }
 
     file = open(stdin_str_buffer, O_RDONLY);
+#endif
 
     //create a socket
     sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -79,11 +105,21 @@ int main(int argc, char *argv[])
 
         for(i=0; i<nfds; i++){
             if (events[i].events & EPOLLOUT){
+                #if 0
                 nread = read(file, block, sizeof(block));
                 if (nread > 0) {
                     write(sockfd, block, nread);
                 } else{
                     goto exit;
+                }
+                #endif
+                //printf("ready to write\n");
+                if (0 != stdin_str_len) {
+                    write(sockfd, stdin_str_buffer, stdin_str_len);
+                    stdin_str_len = 0;
+                }
+                else {
+                    usleep(1000);
                 }
 
                 ev.events = EPOLLOUT|EPOLLET;

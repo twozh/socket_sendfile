@@ -42,8 +42,7 @@ int main(int argc, char *argv[])
     int nfds, i;
     struct epoll_event ev, events[2];
     int epollfd;
-
-    file = open("file.out", O_WRONLY|O_CREAT|O_TRUNC, S_IRUSR|S_IWUSR);
+    int close_flag;
 
     //create server socket fd
     server_sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -96,34 +95,40 @@ int main(int argc, char *argv[])
                 }
                 printf("has one client connected!\n");
             } else {
-                while (1) {
-                    nr_read = read(events[i].data.fd, read_buffer, sizeof(read_buffer)); 
-                    if (0 == nr_read){
-                        printf("client[%d] is closed\n", events[i].data.fd);
-                        close(events[i].data.fd);
-
-                        //ev.events = EPOLLIN|EPOLLET;
-                        //ev.data.fd = events[i].data.fd;
-                        //epoll_ctl(epollfd, EPOLL_CTL_DEL, events[i].data.fd, &ev);
-
-                        close(server_sockfd);
-                        exit(EXIT_SUCCESS);
-                        break;
-                    }   
-                    else if(-1 == nr_read){
-                        if (errno != EAGAIN){
-                            perror("read");
-                        }
-                        break;
+                close_flag = 0;
+                nr_read = read(events[i].data.fd, read_buffer, sizeof(read_buffer)); 
+                printf("nr_read: %d\n", nr_read);
+                if (0 == nr_read){
+                    close_flag = 1;
+                    printf("client[%d] is closed\n", events[i].data.fd);
+                }   
+                else if(-1 == nr_read){
+                    if (errno != EAGAIN && errno != EWOULDBLOCK){
+                        close_flag = 1;
+                        perror("read");
                     }
-                    
-                    write(file, read_buffer, nr_read);
+                    else {
+                        printf("read again\n");
+                    }
                 }
+                else if (nr_read > 0) {
+                    printf("server read: %s\n", read_buffer);
+                }
+                
+                //ev.events = EPOLLIN|EPOLLET;
+                //ev.data.fd = events[i].data.fd;
+                //epoll_ctl(epollfd, EPOLL_CTL_MOD, events[i].data.fd, &ev);
 
+                if (1 == close_flag) {
+                    close(events[i].data.fd);
+
+                    ev.events = EPOLLIN|EPOLLET;
+                    ev.data.fd = events[i].data.fd;
+                    epoll_ctl(epollfd, EPOLL_CTL_DEL, events[i].data.fd, &ev);
+                }
+                
             }
         }
-
-
     }
 
     close(server_sockfd);
